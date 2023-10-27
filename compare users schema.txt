@@ -1,0 +1,64 @@
+Write a program that takes two users as input. Compare schema and display 
+1. Common tables from both users. 
+2. Tables of User1 not present in User2. 
+3. Tables of User2 not present in User1.
+
+
+CREATE OR REPLACE PROCEDURE sp_compare_schema(p_user1 VARCHAR2, p_user2 VARCHAR2) AS
+    TYPE t_name IS TABLE OF VARCHAR2(50);
+    com_tab t_name;
+    u1_tab t_name;
+    u2_tab t_name;
+    v_query VARCHAR2(100);
+    v_c_count NUMBER(3);
+    v_u1_count NUMBER(3);
+    v_u2_count NUMBER(3);
+  BEGIN
+    v_query := 'SELECT table_name from all_tables where owner = ''';
+    
+    /* Common tables between p_user1 and p_user2 */
+    select count(table_name) into v_c_count from (select table_name from all_tables where owner = p_user1 intersect
+        select table_name from all_tables where owner = p_user2);
+    IF v_c_count <> 0 THEN
+        dbms_output.put_line('Common tables of ' || p_user1 || ' and ' || p_user2 || ' are: ');
+        EXECUTE IMMEDIATE 'SELECT table_name FROM ( ' || v_query || p_user1 || '''' || ' INTERSECT ' || v_query || p_user2 || '''' || ')' BULK COLLECT INTO com_tab;
+        FOR i IN 1..com_tab.last LOOP
+            dbms_output.put_line(com_tab(i));
+        END LOOP;
+    ELSE
+        dbms_output.put_line('There are no common_tables');
+    END IF;
+    
+    /* Tabels present in p_user1 but not in p_user2 */
+    select count(table_name) into v_u1_count from (select table_name from all_tables where owner = p_user1 minus
+        select table_name from all_tables where owner = p_user2);
+    IF v_u1_count <> 0 THEN
+        dbms_output.put_line('Tables of ' || p_user1 || ' not present in ' || p_user2 || ' are: ');
+        EXECUTE IMMEDIATE 'SELECT table_name FROM ( ' || v_query || p_user1 || '''' || ' MINUS ' || v_query || p_user2 || '''' || ')' BULK COLLECT INTO u1_tab;
+    
+        FOR i IN 1..u1_tab.last LOOP
+            dbms_output.put_line(u1_tab(i));
+        END LOOP;
+    ELSE
+        dbms_output.put_line('There are no tables of ' || p_user1 || ' which are not present in ' || p_user2);
+    END IF;
+    
+    /* Tables present in p_user2 but not in p_user1 */
+    select count(table_name) into v_u2_count from (select table_name from all_tables where owner = p_user2 intersect
+        select table_name from all_tables where owner = p_user1);
+    IF v_u2_count <> 0 THEN
+        dbms_output.put_line('Tables of ' || p_user2 || ' not present in ' || p_user1 || ' are: ');
+        EXECUTE IMMEDIATE 'SELECT table_name FROM ( ' || v_query || p_user2 || '''' || ' MINUS ' || v_query || p_user1 || '''' || ')' BULK COLLECT INTO u2_tab;
+            FOR i IN 1..u2_tab.last LOOP
+                dbms_output.put_line(u2_tab(i));
+            END LOOP;
+    ELSE 
+        dbms_output.put_line('There are no tables of ' || p_user1 || ' which are not present in ' || p_user2);
+    END IF;
+  EXCEPTION 
+    WHEN value_error THEN
+        dbms_output.put_line('No such user.');
+    WHEN others THEN
+        dbms_output.put_line(sqlcode || '-->' || sqlerrm);
+END;
+/
